@@ -1,0 +1,17 @@
+body {
+    position: fixed !important;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+html,
+body {
+    margin: 0px;
+}
+
+.test-button {
+    position: fixed;
+    top: 0px;
+    left: 50%;
+    transform: translateX(-100%);
+}
