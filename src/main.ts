@@ -5,15 +5,16 @@ import * as THREE from "three";
 import * as CANNON from "cannon-es";
 
 import { Entities } from "./Entities.js";
-import { TestCube } from "./TestCube.js";
 import { MoveFreely } from "./developer.js";
 
 import CannonDebugger from "cannon-es-debugger";
 
-const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 1000);
+const domElement = document.getElementById("canvas") as HTMLCanvasElement;
 
-camera.position.y = 2;
-camera.position.z = 3;
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 100);
+
+// camera.position.y = 2;
+// camera.position.z = 3;
 
 // world instance
 
@@ -37,22 +38,24 @@ scene.add(pointLight);
 const EntitiesInstance = new Entities(scene, world);
 
 EntitiesInstance.createGroundTC();
+
 const { updateTimmy } = await EntitiesInstance.createTimmyTC();
 
 // debugger stuff :D
 
-const cannonDebugRenderer = CannonDebugger(scene, world);
+const cannonDebugRenderer = CannonDebugger(scene, world, { color: "red" });
 
 // renderer stuff...
 
 const { WebGLRenderer } = new ThreeRenderer();
 
-const { followCamera } = MoveFreely(camera, document.getElementById("canvas") as HTMLCanvasElement);
+const { followCamera } = MoveFreely(camera, domElement);
 
 function tick(currentTime?: number) {
     requestAnimationFrame(tick);
 
     followCamera();
+
     updateTimmy();
 
     world.step(1 / 60);

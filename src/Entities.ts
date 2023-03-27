@@ -1,13 +1,15 @@
 import * as THREE from "three";
 import * as CANNON from "cannon-es";
-import { GLTF, GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
-import { cannonToThreeQ, cannonToThreeV, threeToCannonQ, threeToCannonV } from "./cannon.js-three.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
+import { cannonToThreeQ, cannonToThreeV } from "./cannon.js-three.js";
 
 class Entities {
     private sceneInstance: THREE.Scene;
     private worldInstance: CANNON.World;
 
     private gltfLoader = new GLTFLoader();
+
+    private groundMaterial?: CANNON.Material;
 
     constructor(s: THREE.Scene, w: CANNON.World) {
         this.sceneInstance = s;
@@ -27,9 +29,13 @@ class Entities {
 
     private createGroundC(): CANNON.Body {
         const groundShape = new CANNON.Plane();
-        const groundBody = new CANNON.Body({ mass: 0 }); // Set mass to 0 to make the body static
+        const groundMaterial = new CANNON.Material("groundMaterial");
+
+        this.groundMaterial = groundMaterial;
+
+        const groundBody = new CANNON.Body({ mass: 0, material: groundMaterial });
         groundBody.addShape(groundShape);
-        groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2); // Rotate the plane to face upwards
+        groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
 
         return groundBody;
     }
@@ -45,7 +51,6 @@ class Entities {
 
     async createTimmyTC() {
         // OFFSET FOR GLTF AND CANNONJS BODY
-        const OFFSET = new THREE.Vector3(-0.25, -0.4, 0.575);
 
         const gltf = await this.gltfLoader.loadAsync("/timmy.glb");
 
@@ -54,6 +59,8 @@ class Entities {
 
         const mesh = gltf.scene.children[0] as THREE.Mesh;
         const geometry = mesh.geometry as THREE.BufferGeometry;
+
+        mesh.geometry.translate(-2.5, -3.6, 5.75);
 
         mesh.castShadow = true;
         mesh.receiveShadow = true;
@@ -71,19 +78,57 @@ class Entities {
             )
                 .scale(0.5)
                 .scale(SD)
+                .scale(0.5)
         );
-        const body = new CANNON.Body({ mass: 0, shape: shape });
+
+        const body = new CANNON.Body({ mass: 5 });
+
+        body.addShape(shape);
+
         body.position.y = 3;
 
-        // ADD WHEELS
+        // ADD RIGIDBODY
 
-        this.createWheelsC(body);
+        const vehicle = this.createRigidVehicle(body);
 
         // METHODS OF TIMMY
 
+        var maxSteerVal = Math.PI / 6;
+        var maxForce = 4.4;
+
+        const moveTimmy = (event: KeyboardEvent) => {
+            var up = event.type == "keyup";
+
+            if (!up && event.type !== "keydown") return;
+
+            switch (event.key) {
+                case "w": // forward
+                    vehicle.setWheelForce(up ? 0 : maxForce, 1);
+                    vehicle.setWheelForce(up ? 0 : maxForce, 3);
+                    break;
+
+                case "s": // backward
+                    vehicle.setWheelForce(up ? 0 : -maxForce, 1);
+                    vehicle.setWheelForce(up ? 0 : -maxForce, 3);
+                    break;
+
+                case "d": // right
+                    vehicle.setSteeringValue(up ? 0 : -maxSteerVal, 0);
+                    vehicle.setSteeringValue(up ? 0 : -maxSteerVal, 2);
+                    break;
+
+                case "a": // left
+                    vehicle.setSteeringValue(up ? 0 : maxSteerVal, 0);
+                    vehicle.setSteeringValue(up ? 0 : maxSteerVal, 2);
+                    break;
+            }
+        };
+
+        document.onkeydown = moveTimmy;
+        document.onkeyup = moveTimmy;
+
         const updateTimmy = () => {
-            body.position.x += 0.001;
-            const correctedPosition = cannonToThreeV(body.position).add(OFFSET);
+            const correctedPosition = cannonToThreeV(body.position);
             const correctedQuaternion = cannonToThreeQ(body.quaternion);
 
             mesh.position.copy(correctedPosition);
@@ -95,7 +140,7 @@ class Entities {
 
         this.addToTC(mesh, body);
 
-        return { updateTimmy };
+        return { updateTimmy, timmyT: mesh };
     }
 
     private addToTC(s: THREE.Mesh, w: CANNON.Body) {
@@ -103,54 +148,88 @@ class Entities {
         this.worldInstance.addBody(w);
     }
 
-    private createWheelsC(chassisBody: CANNON.Body) {
-        // Set collision filters for wheel and chassis bodies
-        const wheelGroup = 999; // A unique group number for wheels
-        const chassisGroup = 9999; // A unique group number for the chassis
+    private createRigidVehicle(chassisBody: CANNON.Body) {
+        this.worldInstance.defaultContactMaterial.friction = 0.2;
 
-        const wheelMask = chassisGroup; // Wheels can only collide with the chassis
-        const chassisMask = wheelGroup; // Chassis can only collide with the wheels
+        const wheelMaterial = new CANNON.Material("wheelMaterial");
 
-        const wheelShape = new CANNON.Sphere(0.12);
+        const wheelGroundContactMaterial = (window.wheelGroundContactMaterial = new CANNON.ContactMaterial(
+            wheelMaterial,
+            this.groundMaterial as CANNON.Material,
+            {
+                friction: 0.3,
+                restitution: 0,
+                contactEquationStiffness: 1000,
+            }
+        ));
 
-        const wheelBody1 = new CANNON.Body({ mass: 5, position: new CANNON.Vec3(-0.39, -0.185, 0.31) });
-        const wheelBody2 = new CANNON.Body({ mass: 5, position: new CANNON.Vec3(-0.39, -0.185, -0.31) });
-        const wheelBody3 = new CANNON.Body({ mass: 5, position: new CANNON.Vec3(0.39, -0.185, 0.31) });
-        const wheelBody4 = new CANNON.Body({ mass: 5, position: new CANNON.Vec3(0.39, -0.185, -0.31) });
+        this.worldInstance.addContactMaterial(wheelGroundContactMaterial);
 
-        wheelBody1.collisionFilterGroup = wheelGroup;
-        wheelBody1.collisionFilterMask = wheelMask;
-        wheelBody2.collisionFilterGroup = wheelGroup;
-        wheelBody2.collisionFilterMask = wheelMask;
-        wheelBody3.collisionFilterGroup = wheelGroup;
-        wheelBody3.collisionFilterMask = wheelMask;
-        wheelBody4.collisionFilterGroup = wheelGroup;
-        wheelBody4.collisionFilterMask = wheelMask;
+        // Create the vehicle
+        const vehicle = new CANNON.RigidVehicle({
+            chassisBody: chassisBody,
+        });
 
-        chassisBody.collisionFilterGroup = chassisGroup;
-        chassisBody.collisionFilterMask = chassisMask;
+        const x = 0.4,
+            y = -0.25,
+            z = 0.365,
+            r = 0.125,
+            m = 5.5;
 
-        wheelBody1.addShape(wheelShape);
-        wheelBody2.addShape(wheelShape);
-        wheelBody3.addShape(wheelShape);
-        wheelBody4.addShape(wheelShape);
+        var wheelShape = new CANNON.Sphere(r);
 
-        this.worldInstance.addBody(wheelBody1);
-        this.worldInstance.addBody(wheelBody2);
-        this.worldInstance.addBody(wheelBody3);
-        this.worldInstance.addBody(wheelBody4);
+        var down = new CANNON.Vec3(-1, 0, 0);
 
-        // Create constraints to connect wheels to car body
-        const constraints = [
-            new CANNON.PointToPointConstraint(chassisBody, new CANNON.Vec3(-0.39, -0.24, 0.31), wheelBody1, new CANNON.Vec3(0, 0, 0)),
-            new CANNON.PointToPointConstraint(chassisBody, new CANNON.Vec3(-0.39, -0.24, -0.31), wheelBody2, new CANNON.Vec3(0, 0, 0)),
-            new CANNON.PointToPointConstraint(chassisBody, new CANNON.Vec3(0.39, -0.24, 0.31), wheelBody3, new CANNON.Vec3(0, 0, 0)),
-            new CANNON.PointToPointConstraint(chassisBody, new CANNON.Vec3(0.39, -0.24, -0.31), wheelBody4, new CANNON.Vec3(0, 0, 0)),
-        ];
+        // fr
+        var wheelBody = new CANNON.Body({ mass: m, material: wheelMaterial });
+        wheelBody.addShape(wheelShape);
 
-        constraints.forEach((constraint) => this.worldInstance.addConstraint(constraint));
+        vehicle.addWheel({
+            body: wheelBody,
+            position: new CANNON.Vec3(-x, y, z),
+            axis: new CANNON.Vec3(1, 0, 0),
+            direction: down,
+        });
 
-        wheelBody1.applyForce(new CANNON.Vec3(0, 1, 0));
+        var wheelBody = new CANNON.Body({ mass: m, material: wheelMaterial });
+        wheelBody.addShape(wheelShape);
+
+        // br
+        vehicle.addWheel({
+            body: wheelBody,
+            position: new CANNON.Vec3(-x, y, -z),
+            axis: new CANNON.Vec3(1, 0, 0),
+            direction: down,
+        });
+
+        // fr
+        var wheelBody = new CANNON.Body({ mass: m, material: wheelMaterial });
+        wheelBody.addShape(wheelShape);
+        vehicle.addWheel({
+            body: wheelBody,
+            position: new CANNON.Vec3(x, y, z),
+            axis: new CANNON.Vec3(1, 0, 0),
+            direction: down,
+        });
+
+        // bl
+        var wheelBody = new CANNON.Body({ mass: m, material: wheelMaterial });
+        wheelBody.addShape(wheelShape);
+        vehicle.addWheel({
+            body: wheelBody,
+            position: new CANNON.Vec3(x, y, -z),
+            axis: new CANNON.Vec3(1, 0, 0),
+            direction: down,
+        });
+
+        // Some damping to not spin wheels too fast
+        for (var i = 0; i < vehicle.wheelBodies.length; i++) {
+            vehicle.wheelBodies[i].angularDamping = 0.6;
+        }
+
+        vehicle.addToWorld(this.worldInstance);
+
+        return vehicle;
     }
 }
 

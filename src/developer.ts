@@ -2,7 +2,7 @@ import * as THREE from "three";
 import * as CANNON from "cannon-es";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 
-interface KeyboardState {
+export interface KeyboardState {
     forward: boolean;
     backward: boolean;
     left: boolean;
@@ -61,9 +61,27 @@ export function MoveFreely(camera: THREE.PerspectiveCamera, domElement?: HTMLEle
         controls.lock();
     });
 
+    let previousPosition: number[] | undefined | [] = localStorage
+        .getItem("last-position")
+        ?.split(";")
+        .map((v) => Number(v));
+
+    let previousQuaternion: number[] | undefined | [] = localStorage
+        .getItem("last-quaternion")
+        ?.split(";")
+        .map((v) => Number(v));
+
+    if (typeof previousPosition === "object" && previousPosition.length >= 2 && typeof previousPosition[0] === "number")
+        camera.position.set(previousPosition[0], previousPosition[1], previousPosition[2]);
+
+    if (typeof previousQuaternion === "object" && previousQuaternion.length >= 3 && typeof previousQuaternion[0] === "number")
+        camera.quaternion.set(previousQuaternion[0], previousQuaternion[1], previousQuaternion[2], previousQuaternion[3]);
+
     const keyboardState = KeyboardListener();
 
     function followCamera() {
+        if (!controls.isLocked) return;
+
         const { forward, backward, left, right } = keyboardState;
 
         const SPEED = 0.05;
@@ -77,6 +95,9 @@ export function MoveFreely(camera: THREE.PerspectiveCamera, domElement?: HTMLEle
         direction.subVectors(frontVector, sideVector).normalize().multiplyScalar(SPEED).applyEuler(camera.rotation);
 
         camera.position.add(direction);
+
+        localStorage.setItem("last-position", `${camera.position.x};${camera.position.y};${camera.position.z}`);
+        localStorage.setItem("last-quaternion", `${camera.quaternion.x};${camera.quaternion.y};${camera.quaternion.z};${camera.quaternion.w}`);
     }
 
     return { controls, followCamera };
@@ -87,6 +108,7 @@ declare global {
         aP: number;
         bP: number;
         cP: number;
+        wheelGroundContactMaterial: any;
     }
 }
 
