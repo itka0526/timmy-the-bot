@@ -17,7 +17,7 @@ class Entities {
     }
 
     private createGroundT(): THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial> {
-        const groundGeometry = new THREE.PlaneGeometry(50, 50);
+        const groundGeometry = new THREE.PlaneGeometry(1000, 1000);
         const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x808080, side: THREE.FrontSide });
         const groundMesh = new THREE.Mesh(groundGeometry, groundMaterial);
 

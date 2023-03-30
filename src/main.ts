@@ -8,13 +8,7 @@ import { Entities } from "./Entities.js";
 import { MoveFreely } from "./developer.js";
 
 import CannonDebugger from "cannon-es-debugger";
-
-const domElement = document.getElementById("canvas") as HTMLCanvasElement;
-
-const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 100);
-
-// camera.position.y = 2;
-// camera.position.z = 3;
+import Camera from "./Camera.js";
 
 // world instance
 
@@ -39,7 +33,7 @@ const EntitiesInstance = new Entities(scene, world);
 
 EntitiesInstance.createGroundTC();
 
-const { updateTimmy } = await EntitiesInstance.createTimmyTC();
+const { updateTimmy, timmyT } = await EntitiesInstance.createTimmyTC();
 
 // debugger stuff :D
 
@@ -49,19 +43,29 @@ const cannonDebugRenderer = CannonDebugger(scene, world, { color: "red" });
 
 const { WebGLRenderer } = new ThreeRenderer();
 
-const { followCamera } = MoveFreely(camera, domElement);
+const camera = new Camera({ config: { cyberTruck: true }, renderer: WebGLRenderer });
+
+camera.target = timmyT.position;
+
+WebGLRenderer.domElement;
+
+// const { followCamera } = MoveFreely(camera, domElement);
 
 function tick(currentTime?: number) {
+    camera.updatePan();
+    camera.updateZoom();
+    camera.updatePosition();
+
     requestAnimationFrame(tick);
 
-    followCamera();
+    // followCamera();
 
     updateTimmy();
 
     world.step(1 / 60);
 
     // Render Three.js scene
-    WebGLRenderer.render(scene, camera);
+    WebGLRenderer.render(scene, camera.instance);
 
     // Update Cannon.js debugger
     cannonDebugRenderer.update();
